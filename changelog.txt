@@ -1,0 +1,5 @@
+World Link v{ModVersion} has been published to {tMLBuildPurpose} tML v{tMLVersion}.
+[h1]Changed[/h1]
+[list]
+[*] Mod Side is now "Client"
+[/list]

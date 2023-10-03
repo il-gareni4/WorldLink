@@ -1,0 +1,22 @@
+UI: {
+	CharacterListItem: {
+		NoWorld: No world linked
+		PlayWorld: Play "{0}" world
+	}
+
+	WorldListItem: {
+		Link: Link {0}
+		Unlink: Unlink from {0}
+	}
+}
+
+Configs: {
+	LinkConfig: {
+		DisplayName: Client Config
+
+		ShowNoWorldLinkedPlayButton: {
+			Label: Show link button on character even if world is not linked
+			Tooltip: ""
+		}
+	}
+}
