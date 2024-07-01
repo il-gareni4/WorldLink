@@ -1,228 +1,251 @@
+using System.Linq;
+using System.Reflection;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoMod.Cil;
 using ReLogic.Content;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Xml;
 using Terraria;
 using Terraria.GameContent.UI.Elements;
 using Terraria.IO;
 using Terraria.Localization;
 using Terraria.ModLoader;
 using Terraria.UI;
-using WorldLink.Common;
-using static System.Net.Mime.MediaTypeNames;
 
-namespace WorldLink
+namespace WorldLink;
+
+public class WorldLink : Mod
 {
-    public class WorldLink : Mod
+    private Asset<Texture2D> _chainButtonTexture;
+    private LocalizedText _linkText;
+    private Asset<Texture2D> _noChainButtonTexture;
+    private LocalizedText _noWorldText;
+    private Asset<Texture2D> _playChainButtonTexture;
+    private LocalizedText _playWorldText;
+    private LocalizedText _unlinkText;
+
+    public override void Load()
     {
-        public LocalizedText NoWorldText;
-        public LocalizedText PlayWorldText;
-        public LocalizedText LinkText;
-        public LocalizedText UnlinkText;
-        public Asset<Texture2D> ChainButtonTexture;
-        public Asset<Texture2D> NoChainButtonTexture;
-        public Asset<Texture2D> PlayChainButtonTexture;
+        _noWorldText = Language.GetText("Mods.WorldLink.UI.CharacterListItem.NoWorld");
+        _playWorldText = Language.GetText("Mods.WorldLink.UI.CharacterListItem.PlayWorld");
+        _linkText = Language.GetText("Mods.WorldLink.UI.WorldListItem.Link");
+        _unlinkText = Language.GetText("Mods.WorldLink.UI.WorldListItem.Unlink");
 
-        public override void Load()
+        _chainButtonTexture = Assets.Request<Texture2D>("Assets/ChainButton");
+        _noChainButtonTexture = Assets.Request<Texture2D>("Assets/NoChainButton");
+        _playChainButtonTexture = Assets.Request<Texture2D>("Assets/PlayChainButton");
+
+        IL_UICharacterListItem.ctor += AddCharacterLinkButton;
+        IL_UIWorldListItem.ctor += AddWorldLinkButton;
+    }
+
+    public override void Unload()
+    {
+        _noWorldText = null;
+        _playWorldText = null;
+        _linkText = null;
+        _unlinkText = null;
+
+        _chainButtonTexture = null;
+        _noChainButtonTexture = null;
+        _playChainButtonTexture = null;
+
+        IL_UICharacterListItem.ctor -= AddCharacterLinkButton;
+        IL_UIWorldListItem.ctor -= AddWorldLinkButton;
+    }
+
+    private static WorldFileData? GetWorldDataById(string worldId)
+    {
+        if (Main.WorldList.Count == 0) Main.LoadWorlds();
+        return Main.WorldList.FirstOrDefault(worldData => worldData!.Id() == worldId, null);
+    }
+
+    private static void PlayWorld(WorldFileData worldData)
+    {
+        UIWorldListItem worldUi = new(worldData, 0, true);
+        var playButton = (UIImageButton)worldUi.Children.ToArray()[1];
+        UIMouseEvent evt = new(playButton, new Vector2(Main.mouseX, Main.mouseY));
+
+        worldUi.GetType()
+            .GetMethod("PlayGame", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.Invoke(worldUi, [evt, playButton]);
+    }
+
+    private static UIText? GetButtonLabel(UICharacterListItem listItem)
+    {
+        // If it's vanilla UI Element
+        if (listItem.GetType() == typeof(UICharacterListItem))
         {
-            NoWorldText = Language.GetText("Mods.WorldLink.UI.CharacterListItem.NoWorld");
-            PlayWorldText = Language.GetText("Mods.WorldLink.UI.CharacterListItem.PlayWorld");
-            LinkText = Language.GetText("Mods.WorldLink.UI.WorldListItem.Link");
-            UnlinkText = Language.GetText("Mods.WorldLink.UI.WorldListItem.Unlink");
-
-            ChainButtonTexture = Assets.Request<Texture2D>("Assets/ChainButton");
-            NoChainButtonTexture = Assets.Request<Texture2D>("Assets/NoChainButton");
-            PlayChainButtonTexture = Assets.Request<Texture2D>("Assets/PlayChainButton");
-
-            IL_UICharacterListItem.ctor += AddCharacterLinkButton;
-            IL_UIWorldListItem.ctor += AddWorldLinkButton;
+            return (UIText?)listItem.GetType()
+                .GetField("_buttonLabel", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(listItem);
         }
 
-        public override void Unload()
+        return (UIText)listItem.Children.First(el => el is UIText && el.Left.Pixels > 0 && el.Top.Pixels < 0);
+    }
+
+    private static UIText? GetButtonLabel(UIWorldListItem listItem)
+    {
+        // If it's vanilla UI Element
+        if (listItem.GetType() == typeof(UIWorldListItem))
         {
-            NoWorldText = null;
-            PlayWorldText = null;
-            LinkText = null;
-            UnlinkText = null;
-
-            ChainButtonTexture = null;
-            NoChainButtonTexture = null;
-            PlayChainButtonTexture = null;
-
-            IL_UICharacterListItem.ctor -= AddCharacterLinkButton;
-            IL_UIWorldListItem.ctor -= AddWorldLinkButton;
+            return (UIText?)listItem.GetType()
+                .GetField("_buttonLabel", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(listItem);
         }
 
-        private static WorldFileData GetWorldDataById(string worldId)
+        return (UIText)listItem.Children.First(el => el is UIText && el.Left.Pixels > 0 && el.Top.Pixels < 0);
+    }
+
+    private void AddCharacterLinkButton(ILContext il)
+    {
+        try
         {
-            if (!Main.WorldList.Any()) Main.LoadWorlds();
-            foreach (WorldFileData worldData in Main.WorldList)
+            ILCursor c = new(il)
             {
-                if (worldData.UniqueId.ToString() == worldId) return worldData;
-            }
-            return null;
-        }
+                Index = 140
+            };
 
-        private static void PlayWorld(WorldFileData worldData)
-        {
-            UIWorldListItem worldUi = new(worldData, 0, true);
-            UIImageButton playButton = (UIImageButton)((List<UIElement>)worldUi.GetType().GetField("Elements", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(worldUi))[1];
-            UIMouseEvent evt = new(playButton, new Vector2(Main.mouseX, Main.mouseY));
-            worldUi.GetType().GetMethod("PlayGame", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(worldUi, new object[] { evt, playButton });
-        }
-
-        private static UIText GetButtonLabel(UICharacterListItem listItem)
-        {
-            if (listItem.GetType() == typeof(UICharacterListItem))
-                return (UIText)listItem.GetType()
-                    .GetField("_buttonLabel", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.GetValue(listItem);
-            else
-                return (UIText)((List<UIElement>)listItem.GetType()
-                    .GetField("Elements", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.GetValue(listItem)).First((el) => el is UIText && el.Left.Pixels > 0 && el.Top.Pixels < 0);
-        }
-
-        private static UIText GetButtonLabel(UIWorldListItem listItem)
-        {
-            if (listItem.GetType() == typeof(UIWorldListItem))
-                return (UIText)listItem.GetType()
-                    .GetField("_buttonLabel", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.GetValue(listItem);
-            else
-                return (UIText)((List<UIElement>)listItem.GetType()
-                    .GetField("Elements", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?.GetValue(listItem)).First((el) => el is UIText && el.Left.Pixels > 0 && el.Top.Pixels < 0);
-        }
-
-        private void AddCharacterLinkButton(ILContext il)
-        {
-            try
+            c.EmitLdarg0();
+            c.EmitLdarg1();
+            c.EmitLdloca(0);
+            c.EmitLdarg2();
+            c.EmitDelegate((UICharacterListItem listItem, PlayerFileData playerData, ref float shift, int order) =>
             {
-                ILCursor c = new(il)
+                string playerId = playerData.Id();
+
+                if (ModSave.HasLink(playerId))
                 {
-                    Index = 140
+                    WorldFileData? worldData = GetWorldDataById(ModSave.GetLink(playerId));
+                    if (worldData is not { IsValid: true }) ModSave.RemoveLink(playerId);
+                }
+
+                if ((!ModSave.HasLink(playerId) && !LinkConfig.Instance.ShowNoWorldLinkedPlayButton) ||
+                    (Main.menuMultiplayer && !Main.menuServer))
+                    return;
+
+                UIImageButton linkButton = new(_noChainButtonTexture)
+                {
+                    VAlign = 1f,
+                    Left = StyleDimension.FromPixelsAndPercent(shift, 0f)
+                };
+                if (ModSave.HasLink(playerId)) linkButton.SetImage(_playChainButtonTexture);
+
+                linkButton.OnLeftClick += (_, _) =>
+                {
+                    if (!ModSave.HasLink(playerId)) return;
+                    WorldFileData? worldData = GetWorldDataById(ModSave.GetLink(playerId));
+                    if (worldData is not { IsValid: true }) return;
+
+                    playerData.SetAsActive();
+                    PlayWorld(worldData);
                 };
 
-                c.EmitLdarg0();
-                c.EmitLdarg1();
-                c.EmitLdloca(0);
-                c.EmitLdarg2();
-                c.EmitDelegate((UICharacterListItem listItem, PlayerFileData playerData, ref float shift, int order) =>
+                linkButton.OnRightClick += (_, _) =>
                 {
-                    LinkPlayer modPlayer = playerData.Player.GetModPlayer<LinkPlayer>();
-                    WorldFileData worldData = GetWorldDataById(modPlayer.LinkedWorldId);
+                    if (!ModSave.HasLink(playerId)) return;
 
-                    if (modPlayer.LinkedWorldId is not null && (worldData is null || !worldData.IsValid)) 
-                        modPlayer.LinkedWorldId = null;
-                    if ((modPlayer.LinkedWorldId is null && !LinkConfig.Instance.ShowNoWorldLinkedPlayButton) ||
-                        (Main.menuMultiplayer && !Main.menuServer))
-                        return;
-
-                    UIImageButton linkButton = new(NoChainButtonTexture)
-                    {
-                        VAlign = 1f,
-                        Left = StyleDimension.FromPixelsAndPercent(shift, 0f)
-                    };
-                    if (modPlayer.LinkedWorldId is not null) linkButton.SetImage(PlayChainButtonTexture);
-
-                    linkButton.OnLeftClick += (evt, el) =>
-                    {
-                        if (modPlayer.LinkedWorldId is null) return;
-                        playerData.SetAsActive();
-                        PlayWorld(worldData);
-                    };
-                    linkButton.OnMouseOver += (evt, el) =>
-                    {
-                        string text = modPlayer.LinkedWorldId is null ? NoWorldText.Value : PlayWorldText.Format(worldData.Name);
-                        GetButtonLabel(listItem)?.SetText(text);
-                    };
-                    MethodInfo defaultOut = listItem.GetType().GetMethod("ButtonMouseOut", BindingFlags.Instance | BindingFlags.NonPublic);
-                    if (defaultOut is not null)
-                        linkButton.OnMouseOut += defaultOut.CreateDelegate<UIElement.MouseEvent>(listItem);
-                    else
-                        linkButton.OnMouseOut += (evt, el) => GetButtonLabel(listItem)?.SetText("");
-                    linkButton.SetSnapPoint("Link", order, null, null);
-                    listItem.Append(linkButton);
-
-                    shift += 24f;
-                });
-            }
-            catch
-            {
-                MonoModHooks.DumpIL(ModContent.GetInstance<WorldLink>(), il);
-            }
-        }
-
-        private void UpdateWorldListItemText(UIWorldListItem listItem, WorldFileData worldData)
-        {
-            LinkPlayer modPlayer = Main.ActivePlayerFileData.Player.GetModPlayer<LinkPlayer>();
-            if (modPlayer.LinkedWorldId == worldData.UniqueId.ToString()) GetButtonLabel(listItem)?.SetText(UnlinkText.Format(modPlayer.Player.name));
-            else GetButtonLabel(listItem)?.SetText(LinkText.Format(modPlayer.Player.name));
-        }
-
-        private void AddWorldLinkButton(ILContext il)
-        {
-            try
-            {
-                ILCursor c = new(il)
-                {
-                    Index = 305
+                    ModSave.RemoveLink(playerId);
+                    linkButton.SetImage(_noChainButtonTexture);
                 };
-                c.EmitLdarg0();
-                c.EmitLdarg1();
-                c.EmitLdloca(0);
-                c.EmitLdarg2();
-                c.EmitLdarg3();
-                c.EmitDelegate((UIWorldListItem listItem, WorldFileData worldData, ref float shift, int order, bool canBePlayed) =>
+
+                linkButton.OnMouseOver += (_, _) =>
                 {
-                    if (!canBePlayed) return;
-                    LinkPlayer modPlayer = Main.ActivePlayerFileData.Player.GetModPlayer<LinkPlayer>();
-
-                    UIImageButton linkButton = new(ChainButtonTexture)
+                    if (ModSave.HasLink(playerId))
                     {
-                        VAlign = 1f,
-                        Left = StyleDimension.FromPixelsAndPercent(shift, 0f)
-                    };
-                    if (modPlayer.LinkedWorldId == worldData.UniqueId.ToString()) linkButton.SetImage(NoChainButtonTexture);
+                        WorldFileData? worldData = GetWorldDataById(ModSave.GetLink(playerId));
+                        if (worldData is not { IsValid: true }) return;
+                        GetButtonLabel(listItem)?.SetText(_playWorldText.Format(worldData.Name));
+                    }
+                    else GetButtonLabel(listItem)?.SetText(_noWorldText.Value);
+                };
+                MethodInfo? defaultOut = listItem.GetType()
+                    .GetMethod("ButtonMouseOut", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (defaultOut is not null)
+                    linkButton.OnMouseOut += defaultOut.CreateDelegate<UIElement.MouseEvent>(listItem);
+                else
+                    linkButton.OnMouseOut += (evt, el) => GetButtonLabel(listItem)?.SetText("");
+                linkButton.SetSnapPoint("Link", order);
+                listItem.Append(linkButton);
 
-                    linkButton.OnLeftClick += (evt, el) =>
-                    {
-                        if (modPlayer.LinkedWorldId == worldData.UniqueId.ToString()) modPlayer.LinkedWorldId = null;
-                        else Main.ActivePlayerFileData.Player.GetModPlayer<LinkPlayer>().LinkedWorldId = worldData.UniqueId.ToString();
+                shift += 24f;
+            });
+        }
+        catch
+        {
+            MonoModHooks.DumpIL(ModContent.GetInstance<WorldLink>(), il);
+        }
+    }
 
-                        bool prevMapEnabled = Main.mapEnabled;
-                        Main.mapEnabled = false;
-                        Player.SavePlayer(Main.ActivePlayerFileData, true);
-                        Main.mapEnabled = prevMapEnabled;
+    private void UpdateWorldListItemText(UIWorldListItem listItem, WorldFileData worldData)
+    {
+        GetButtonLabel(listItem)?.SetText(
+            ModSave.TryGetLink(Main.ActivePlayerFileData.Id(), out string? worldId) &&
+            worldId == worldData.UniqueId.ToString()
+                ? _unlinkText.Format(Main.ActivePlayerFileData.Name)
+                : _linkText.Format(Main.ActivePlayerFileData.Name)
+        );
+    }
 
-                        if (linkButton.IsMouseHovering) UpdateWorldListItemText(listItem, worldData);
-                    };
-                    linkButton.OnUpdate += (el) =>
-                    {
-                        if (modPlayer.LinkedWorldId == worldData.UniqueId.ToString()) linkButton.SetImage(NoChainButtonTexture);
-                        else linkButton.SetImage(ChainButtonTexture);
-                    };
-                    linkButton.OnMouseOver += (evt, el) => UpdateWorldListItemText(listItem, worldData);
-                    MethodInfo defaultOut = listItem.GetType().GetMethod("ButtonMouseOut", BindingFlags.Instance | BindingFlags.NonPublic);
-                    if (defaultOut is not null)
-                        linkButton.OnMouseOut += defaultOut.CreateDelegate<UIElement.MouseEvent>(listItem);
-                    else
-                        linkButton.OnMouseOut += (evt, el) => GetButtonLabel(listItem)?.SetText("");
-                    linkButton.SetSnapPoint("Link", order, null, null);
-                    listItem.Append(linkButton);
-
-                    shift += 24f;
-                });
-            }
-            catch
+    private void AddWorldLinkButton(ILContext il)
+    {
+        try
+        {
+            ILCursor c = new(il)
             {
-                MonoModHooks.DumpIL(ModContent.GetInstance<WorldLink>(), il);
-            }
+                Index = 305
+            };
+            c.EmitLdarg0();
+            c.EmitLdarg1();
+            c.EmitLdloca(0);
+            c.EmitLdarg2();
+            c.EmitLdarg3();
+            c.EmitDelegate((UIWorldListItem listItem, WorldFileData worldData, ref float shift, int order,
+                bool canBePlayed) =>
+            {
+                if (!canBePlayed) return;
+                string worldId = worldData.Id();
+
+                UIImageButton linkButton = new(_chainButtonTexture)
+                {
+                    VAlign = 1f,
+                    Left = StyleDimension.FromPixelsAndPercent(shift, 0f)
+                };
+                if (ModSave.HasLink(Main.ActivePlayerFileData.Id())) linkButton.SetImage(_noChainButtonTexture);
+
+                linkButton.OnLeftClick += (_, _) =>
+                {
+                    string playerId = Main.ActivePlayerFileData.Id();
+                    if (ModSave.TryGetLink(playerId, out string? linkedWorldId) &&
+                        linkedWorldId == worldId)
+                        ModSave.RemoveLink(playerId);
+                    else ModSave.SetLink(playerId, worldId);
+
+                    if (linkButton.IsMouseHovering) UpdateWorldListItemText(listItem, worldData);
+                };
+                linkButton.OnUpdate += _ =>
+                {
+                    if (ModSave.TryGetLink(Main.ActivePlayerFileData.Id(), out string? linkedWorldId) &&
+                        linkedWorldId == worldData.Id())
+                        linkButton.SetImage(_noChainButtonTexture);
+                    else
+                        linkButton.SetImage(_chainButtonTexture);
+                };
+                linkButton.OnMouseOver += (_, _) => UpdateWorldListItemText(listItem, worldData);
+                MethodInfo? defaultOut = listItem.GetType()
+                    .GetMethod("ButtonMouseOut", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (defaultOut != null)
+                    linkButton.OnMouseOut += defaultOut.CreateDelegate<UIElement.MouseEvent>(listItem);
+                else
+                    linkButton.OnMouseOut += (_, _) => GetButtonLabel(listItem)?.SetText("");
+                linkButton.SetSnapPoint("Link", order);
+                listItem.Append(linkButton);
+
+                shift += 24f;
+            });
+        }
+        catch
+        {
+            MonoModHooks.DumpIL(ModContent.GetInstance<WorldLink>(), il);
         }
     }
 }

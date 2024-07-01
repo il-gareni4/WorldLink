@@ -1,17 +1,15 @@
 ﻿using System.ComponentModel;
 using Terraria.ModLoader.Config;
 
-namespace WorldLink
+namespace WorldLink;
+
+public class LinkConfig : ModConfig
 {
-    public class LinkConfig : ModConfig
-    {
-        public static LinkConfig Instance;
+    public static LinkConfig Instance;
 
-        public override ConfigScope Mode => ConfigScope.ClientSide;
+    [DefaultValue(true)] public bool ShowNoWorldLinkedPlayButton;
 
-        public override void OnLoaded() => Instance = this;
+    public override ConfigScope Mode => ConfigScope.ClientSide;
 
-        [DefaultValue(true)]
-        public bool ShowNoWorldLinkedPlayButton;
-    }
+    public override void OnLoaded() => Instance = this;
 }
