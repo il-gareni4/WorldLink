@@ -2,6 +2,6 @@ Has it ever happened to you that, having created many characters and worlds, you
 
 == How to use this mod ==
 In order to link a world to a character, you need to select the character to which you want to link the world, then in the world selection menu in the list of buttons there will be a button with a chain icon, which allows you to link a world to the current character. Now in the character selection menu you can immediately launch the linked world.
-To unlink a world from a character, you need to click on the link button again on the selected character in the list of worlds (this time the monk will have a cross).
+To unlink a world from a character, you need to click on the link button again on the selected character in the list of worlds (this time the icon will have a cross).
 
 In the config you can hide the display of the button if there is no world linked to the character
